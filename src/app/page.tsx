@@ -79,6 +79,8 @@ export default function Home() {
   // Handlers para tarefas
   const handleSalvarTarefa = async (tarefa: Tarefa) => {
     try {
+      setError(null); // Limpar erro anterior
+      
       if (tarefaEditando) {
         const tarefaAtualizada = await tarefasService.atualizar(tarefaEditando.id!, tarefa);
         setTarefas(prev => prev.map(t => t.id === tarefaEditando.id ? tarefaAtualizada : t));
@@ -89,9 +91,14 @@ export default function Home() {
       
       setMostrarFormTarefa(false);
       setTarefaEditando(undefined);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao salvar tarefa:', err);
-      setError('Erro ao salvar tarefa. Tente novamente.');
+      
+      // Mostrar mensagem de erro específica
+      const mensagemErro = err?.message || 'Erro ao salvar tarefa, tente novamente.';
+      setError(mensagemErro);
+      
+      // Não fechar o formulário em caso de erro para o usuário poder tentar novamente
     }
   };
 
@@ -127,6 +134,8 @@ export default function Home() {
   // Handlers para processos
   const handleSalvarProcesso = async (processo: Processo) => {
     try {
+      setError(null); // Limpar erro anterior
+      
       if (processoEditando) {
         const processoAtualizado = await processosService.atualizar(processoEditando.id!, processo);
         setProcessos(prev => prev.map(p => p.id === processoEditando.id ? processoAtualizado : p));
@@ -137,9 +146,14 @@ export default function Home() {
       
       setMostrarFormProcesso(false);
       setProcessoEditando(undefined);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao salvar processo:', err);
-      setError('Erro ao salvar processo. Tente novamente.');
+      
+      // Mostrar mensagem de erro específica
+      const mensagemErro = err?.message || 'Erro ao salvar processo, tente novamente.';
+      setError(mensagemErro);
+      
+      // Não fechar o formulário em caso de erro para o usuário poder tentar novamente
     }
   };
 
