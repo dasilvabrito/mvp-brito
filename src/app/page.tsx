@@ -1,36 +1,50 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tarefa, Processo } from '@/lib/types';
-import { tarefasService, processosService } from '@/lib/supabase';
-import { formatarData, obterCorStatus, obterCorPrioridade } from '@/lib/utils';
-import FormularioTarefa from '@/components/FormularioTarefa';
-import FormularioProcesso from '@/components/FormularioProcesso';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Plus, 
   Calendar, 
   Clock, 
-  Flag, 
-  Tag, 
-  FileText, 
   User, 
-  UserCheck,
-  Edit,
+  FileText, 
+  AlertTriangle,
   CheckCircle,
-  AlertCircle,
+  XCircle,
+  Edit,
+  Trash2,
   Scale
 } from 'lucide-react';
+import FormularioTarefa from '@/components/FormularioTarefa';
+import FormularioProcesso from '@/components/FormularioProcesso';
+import { tarefasService, processosService } from '@/lib/supabase';
+import type { Tarefa, Processo } from '@/lib/types';
+import { 
+  formatarData, 
+  formatarNumeroCNJ, 
+  isDataVencida, 
+  diasRestantes,
+  getClassePrioridade,
+  getClasseStatus 
+} from '@/lib/utils';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'tarefas' | 'processos'>('tarefas');
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFormularioTarefa, setShowFormularioTarefa] = useState(false);
-  const [showFormularioProcesso, setShowFormularioProcesso] = useState(false);
-  const [tarefaParaEditar, setTarefaParaEditar] = useState<Tarefa | undefined>();
-  const [processoParaEditar, setProcessoParaEditar] = useState<Processo | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  
+  // Estados para formulários
+  const [mostrarFormTarefa, setMostrarFormTarefa] = useState(false);
+  const [mostrarFormProcesso, setMostrarFormProcesso] = useState(false);
+  const [tarefaEditando, setTarefaEditando] = useState<Tarefa | undefined>();
+  const [processoEditando, setProcessoEditando] = useState<Processo | undefined>();
 
+  // Carregar dados iniciais
   useEffect(() => {
     carregarDados();
   }, []);
@@ -38,302 +52,436 @@ export default function Home() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      // Carregar apenas tarefas e processos - sem demandas ou prazos
       const [tarefasData, processosData] = await Promise.all([
-        tarefasService.listar(),
-        processosService.listar()
+        tarefasService.listar().catch(err => {
+          console.error('Erro ao carregar tarefas:', err);
+          return [];
+        }),
+        processosService.listar().catch(err => {
+          console.error('Erro ao carregar processos:', err);
+          return [];
+        })
       ]);
-      setTarefas(tarefasData || []);
-      setProcessos(processosData || []);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      
+      setTarefas(tarefasData);
+      setProcessos(processosData);
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err);
+      setError('Erro ao carregar dados. Verifique sua conexão com o Supabase.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEditarTarefa = (tarefa: Tarefa) => {
-    setTarefaParaEditar(tarefa);
-    setShowFormularioTarefa(true);
-  };
-
-  const handleEditarProcesso = (processo: Processo) => {
-    setProcessoParaEditar(processo);
-    setShowFormularioProcesso(true);
-  };
-
-  const handleConcluirTarefa = async (tarefa: Tarefa) => {
+  // Handlers para tarefas
+  const handleSalvarTarefa = async (tarefa: Tarefa) => {
     try {
-      await tarefasService.atualizar(tarefa.id!, {
-        status: 'concluida',
-        data_conclusao: new Date().toISOString()
-      });
-      carregarDados();
-    } catch (error) {
-      console.error('Erro ao concluir tarefa:', error);
+      if (tarefaEditando) {
+        const tarefaAtualizada = await tarefasService.atualizar(tarefaEditando.id!, tarefa);
+        setTarefas(prev => prev.map(t => t.id === tarefaEditando.id ? tarefaAtualizada : t));
+      } else {
+        const novaTarefa = await tarefasService.criar(tarefa);
+        setTarefas(prev => [novaTarefa, ...prev]);
+      }
+      
+      setMostrarFormTarefa(false);
+      setTarefaEditando(undefined);
+    } catch (err) {
+      console.error('Erro ao salvar tarefa:', err);
+      setError('Erro ao salvar tarefa. Tente novamente.');
     }
   };
 
-  const handleCloseFormularios = () => {
-    setShowFormularioTarefa(false);
-    setShowFormularioProcesso(false);
-    setTarefaParaEditar(undefined);
-    setProcessoParaEditar(undefined);
+  const handleEditarTarefa = (tarefa: Tarefa) => {
+    setTarefaEditando(tarefa);
+    setMostrarFormTarefa(true);
   };
 
-  const tarefasPendentes = tarefas.filter(t => t.status !== 'concluida').length;
+  const handleExcluirTarefa = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta tarefa?')) return;
+    
+    try {
+      await tarefasService.excluir(id);
+      setTarefas(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Erro ao excluir tarefa:', err);
+      setError('Erro ao excluir tarefa. Tente novamente.');
+    }
+  };
+
+  const handleMarcarConcluida = async (tarefa: Tarefa) => {
+    try {
+      const tarefaAtualizada = await tarefasService.atualizar(tarefa.id!, {
+        status: tarefa.status === 'concluida' ? 'pendente' : 'concluida'
+      });
+      setTarefas(prev => prev.map(t => t.id === tarefa.id ? tarefaAtualizada : t));
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      setError('Erro ao atualizar status da tarefa.');
+    }
+  };
+
+  // Handlers para processos
+  const handleSalvarProcesso = async (processo: Processo) => {
+    try {
+      if (processoEditando) {
+        const processoAtualizado = await processosService.atualizar(processoEditando.id!, processo);
+        setProcessos(prev => prev.map(p => p.id === processoEditando.id ? processoAtualizado : p));
+      } else {
+        const novoProcesso = await processosService.criar(processo);
+        setProcessos(prev => [novoProcesso, ...prev]);
+      }
+      
+      setMostrarFormProcesso(false);
+      setProcessoEditando(undefined);
+    } catch (err) {
+      console.error('Erro ao salvar processo:', err);
+      setError('Erro ao salvar processo. Tente novamente.');
+    }
+  };
+
+  const handleEditarProcesso = (processo: Processo) => {
+    setProcessoEditando(processo);
+    setMostrarFormProcesso(true);
+  };
+
+  const handleExcluirProcesso = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este processo?')) return;
+    
+    try {
+      await processosService.excluir(id);
+      setProcessos(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('Erro ao excluir processo:', err);
+      setError('Erro ao excluir processo. Tente novamente.');
+    }
+  };
+
+  // Cancelar formulários
+  const handleCancelarFormulario = () => {
+    setMostrarFormTarefa(false);
+    setMostrarFormProcesso(false);
+    setTarefaEditando(undefined);
+    setProcessoEditando(undefined);
+  };
+
+  // Estatísticas
+  const tarefasPendentes = tarefas.filter(t => t.status === 'pendente').length;
+  const tarefasVencidas = tarefas.filter(t => t.status !== 'concluida' && isDataVencida(t.prazo)).length;
   const processosAtivos = processos.filter(p => p.status_processo === 'ativo').length;
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-2 rounded-lg">
-                <Scale className="w-6 h-6 text-white" />
-              </div>
+              <Scale className="h-8 w-8 text-blue-600" />
               <div>
-                <h1 className="text-xl font-bold text-gray-900">LegalTask</h1>
-                <p className="text-sm text-gray-600">Controle de Tarefas Jurídicas</p>
+                <h1 className="text-2xl font-bold text-gray-900">Controle Jurídico</h1>
+                <p className="text-sm text-gray-600">Gestão de tarefas e processos</p>
               </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-6 text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                  <span className="text-gray-600">{tarefasPendentes} tarefas pendentes</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-gray-600">{processosAtivos} processos ativos</span>
-                </div>
+            {/* Estatísticas rápidas */}
+            <div className="hidden md:flex items-center space-x-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{tarefasPendentes}</div>
+                <div className="text-xs text-gray-500">Pendentes</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{tarefasVencidas}</div>
+                <div className="text-xs text-gray-500">Vencidas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{processosAtivos}</div>
+                <div className="text-xs text-gray-500">Processos</div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-4 sm:mb-0">
-            <button
-              onClick={() => setActiveTab('tarefas')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                activeTab === 'tarefas'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Clock className="w-4 h-4 inline mr-2" />
-              Tarefas
-            </button>
-            <button
-              onClick={() => setActiveTab('processos')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                activeTab === 'processos'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <FileText className="w-4 h-4 inline mr-2" />
-              Processos
-            </button>
-          </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Alertas de erro */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              {error}
+              <Button 
+                variant="link" 
+                className="p-0 h-auto ml-2 text-red-600"
+                onClick={() => setError(null)}
+              >
+                Dispensar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <button
-            onClick={() => {
-              if (activeTab === 'tarefas') {
-                setShowFormularioTarefa(true);
-              } else {
-                setShowFormularioProcesso(true);
-              }
-            }}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            <Plus className="w-5 h-5 inline mr-2" />
-            {activeTab === 'tarefas' ? 'Nova Tarefa' : 'Novo Processo'}
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Carregando...</span>
+        {/* Formulários */}
+        {mostrarFormTarefa && (
+          <div className="mb-8">
+            <FormularioTarefa
+              onSalvar={handleSalvarTarefa}
+              onCancelar={handleCancelarFormulario}
+              tarefaInicial={tarefaEditando}
+            />
           </div>
-        ) : (
-          <>
-            {/* Conteúdo das Tarefas */}
-            {activeTab === 'tarefas' && (
-              <div className="space-y-4">
-                {tarefas.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        )}
+
+        {mostrarFormProcesso && (
+          <div className="mb-8">
+            <FormularioProcesso
+              onSalvar={handleSalvarProcesso}
+              onCancelar={handleCancelarFormulario}
+              processoInicial={processoEditando}
+            />
+          </div>
+        )}
+
+        {/* Conteúdo principal */}
+        {!mostrarFormTarefa && !mostrarFormProcesso && (
+          <Tabs defaultValue="tarefas" className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <TabsList className="grid w-full sm:w-auto grid-cols-2">
+                <TabsTrigger value="tarefas" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Tarefas ({tarefas.length})
+                </TabsTrigger>
+                <TabsTrigger value="processos" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Processos ({processos.length})
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setMostrarFormTarefa(true)}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nova Tarefa
+                </Button>
+                <Button 
+                  onClick={() => setMostrarFormProcesso(true)}
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Processo
+                </Button>
+              </div>
+            </div>
+
+            {/* Tab de Tarefas */}
+            <TabsContent value="tarefas" className="space-y-4">
+              {tarefas.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Clock className="h-12 w-12 text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma tarefa cadastrada</h3>
-                    <p className="text-gray-600 mb-6">Comece criando sua primeira tarefa jurídica</p>
-                    <button
-                      onClick={() => setShowFormularioTarefa(true)}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-medium"
-                    >
-                      <Plus className="w-5 h-5 inline mr-2" />
-                      Criar Primeira Tarefa
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {tarefas.map((tarefa) => (
-                      <div key={tarefa.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-3">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">{tarefa.nome}</h3>
-                              <div className="flex items-center space-x-2 ml-4">
-                                <button
-                                  onClick={() => handleEditarTarefa(tarefa)}
-                                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                  title="Editar tarefa"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                {tarefa.status !== 'concluida' && (
-                                  <button
-                                    onClick={() => handleConcluirTarefa(tarefa)}
-                                    className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                    title="Marcar como concluída"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                  </button>
+                    <p className="text-gray-500 text-center mb-4">
+                      Comece criando sua primeira tarefa para organizar seu trabalho jurídico.
+                    </p>
+                    <Button onClick={() => setMostrarFormTarefa(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Criar primeira tarefa
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {tarefas.map((tarefa) => (
+                    <Card key={tarefa.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-start gap-3">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarcarConcluida(tarefa)}
+                                className="p-1 h-auto"
+                              >
+                                {tarefa.status === 'concluida' ? (
+                                  <CheckCircle className="h-5 w-5 text-green-600" />
+                                ) : (
+                                  <div className="h-5 w-5 border-2 border-gray-300 rounded-full" />
+                                )}
+                              </Button>
+                              <div className="flex-1">
+                                <h3 className={`font-medium ${tarefa.status === 'concluida' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                  {tarefa.nome}
+                                </h3>
+                                {tarefa.descricao && (
+                                  <p className="text-sm text-gray-600 mt-1">{tarefa.descricao}</p>
                                 )}
                               </div>
                             </div>
-                            
-                            <p className="text-gray-600 mb-4">{tarefa.descricao}</p>
-                            
-                            <div className="flex flex-wrap gap-3 text-sm">
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="w-4 h-4 text-gray-400" />
-                                <span className="text-gray-600">
-                                  Prazo: {formatarData(tarefa.prazo)}
-                                </span>
+
+                            <div className="flex flex-wrap gap-2">
+                              <Badge className={getClasseStatus(tarefa.status)}>
+                                {tarefa.status === 'pendente' && 'Pendente'}
+                                {tarefa.status === 'em_andamento' && 'Em Andamento'}
+                                {tarefa.status === 'concluida' && 'Concluída'}
+                                {tarefa.status === 'cancelada' && 'Cancelada'}
+                              </Badge>
+                              <Badge className={getClassePrioridade(tarefa.prioridade)}>
+                                {tarefa.prioridade === 'baixa' && 'Baixa'}
+                                {tarefa.prioridade === 'media' && 'Média'}
+                                {tarefa.prioridade === 'alta' && 'Alta'}
+                                {tarefa.prioridade === 'urgente' && 'Urgente'}
+                              </Badge>
+                              <Badge variant="outline">
+                                {tarefa.categoria}
+                              </Badge>
+                            </div>
+
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                <span>{formatarData(tarefa.prazo)}</span>
+                                {isDataVencida(tarefa.prazo) && tarefa.status !== 'concluida' && (
+                                  <AlertTriangle className="h-4 w-4 text-red-500 ml-1" />
+                                )}
                               </div>
-                              
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${obterCorStatus(tarefa.status)}`}>
-                                {tarefa.status.replace('_', ' ').toUpperCase()}
-                              </span>
-                              
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${obterCorPrioridade(tarefa.prioridade)}`}>
-                                <Flag className="w-3 h-3 inline mr-1" />
-                                {tarefa.prioridade.toUpperCase()}
-                              </span>
-                              
-                              <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium border border-gray-200">
-                                <Tag className="w-3 h-3 inline mr-1" />
-                                {tarefa.categoria.toUpperCase()}
-                              </span>
+                              {!isDataVencida(tarefa.prazo) && tarefa.status !== 'concluida' && (
+                                <span className="text-blue-600">
+                                  {diasRestantes(tarefa.prazo)} dias restantes
+                                </span>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Conteúdo dos Processos */}
-            {activeTab === 'processos' && (
-              <div className="space-y-4">
-                {processos.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditarTarefa(tarefa)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleExcluirTarefa(tarefa.id!)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Tab de Processos */}
+            <TabsContent value="processos" className="space-y-4">
+              {processos.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <FileText className="h-12 w-12 text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum processo cadastrado</h3>
-                    <p className="text-gray-600 mb-6">Comece criando seu primeiro processo</p>
-                    <button
-                      onClick={() => setShowFormularioProcesso(true)}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-medium"
-                    >
-                      <Plus className="w-5 h-5 inline mr-2" />
-                      Criar Primeiro Processo
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {processos.map((processo) => (
-                      <div key={processo.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{processo.numero_processo}</h3>
-                                <p className="text-gray-600">{processo.cliente}</p>
+                    <p className="text-gray-500 text-center mb-4">
+                      Cadastre seus processos para manter o controle completo dos casos.
+                    </p>
+                    <Button onClick={() => setMostrarFormProcesso(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Cadastrar primeiro processo
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {processos.map((processo) => (
+                    <Card key={processo.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          <div className="flex-1 space-y-3">
+                            <div>
+                              <h3 className="font-medium text-gray-900 mb-1">
+                                {formatarNumeroCNJ(processo.numero_processo)}
+                              </h3>
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <User className="h-4 w-4" />
+                                <span>{processo.cliente}</span>
                               </div>
-                              <button
-                                onClick={() => handleEditarProcesso(processo)}
-                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-4"
-                                title="Editar processo"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
                             </div>
-                            
-                            <div className="flex flex-wrap gap-3 text-sm">
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="w-4 h-4 text-gray-400" />
-                                <span className="text-gray-600">
-                                  Abertura: {formatarData(processo.data_abertura)}
-                                </span>
+
+                            <div className="flex flex-wrap gap-2">
+                              <Badge className={getClasseStatus(processo.status_processo)}>
+                                {processo.status_processo === 'ativo' && 'Ativo'}
+                                {processo.status_processo === 'arquivado' && 'Arquivado'}
+                                {processo.status_processo === 'suspenso' && 'Suspenso'}
+                                {processo.status_processo === 'finalizado' && 'Finalizado'}
+                              </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                <span>Abertura: {formatarData(processo.data_abertura)}</span>
                               </div>
-                              
                               {processo.data_fechamento && (
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="w-4 h-4 text-gray-400" />
-                                  <span className="text-gray-600">
-                                    Fechamento: {formatarData(processo.data_fechamento)}
-                                  </span>
+                                <div className="flex items-center gap-1">
+                                  <XCircle className="h-4 w-4" />
+                                  <span>Fechamento: {formatarData(processo.data_fechamento)}</span>
                                 </div>
                               )}
-                              
-                              <div className="flex items-center space-x-1">
-                                <UserCheck className="w-4 h-4 text-gray-400" />
-                                <span className="text-gray-600">{processo.advogado_responsavel}</span>
+                              <div className="flex items-center gap-1 sm:col-span-2">
+                                <User className="h-4 w-4" />
+                                <span>Responsável: {processo.advogado_responsavel}</span>
                               </div>
                             </div>
-                            
-                            <div className="mt-3">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${obterCorStatus(processo.status_processo)}`}>
-                                {processo.status_processo.replace('_', ' ').toUpperCase()}
-                              </span>
-                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditarProcesso(processo)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleExcluirProcesso(processo.id!)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         )}
-      </div>
-
-      {/* Modais */}
-      {showFormularioTarefa && (
-        <FormularioTarefa
-          onClose={handleCloseFormularios}
-          onSuccess={carregarDados}
-          tarefaParaEditar={tarefaParaEditar}
-        />
-      )}
-
-      {showFormularioProcesso && (
-        <FormularioProcesso
-          onClose={handleCloseFormularios}
-          onSuccess={carregarDados}
-          processoParaEditar={processoParaEditar}
-        />
-      )}
+      </main>
     </div>
   );
 }
