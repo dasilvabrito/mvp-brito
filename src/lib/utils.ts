@@ -1,74 +1,170 @@
-// Utilitários para validação e formatação
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+/**
+ * Valida número de processo conforme padrão CNJ (17 dígitos)
+ * Formato: NNNNNNN-DD.AAAA.J.TR.OOOO
+ * Onde:
+ * - NNNNNNN: número sequencial do processo
+ * - DD: dígito verificador
+ * - AAAA: ano do ajuizamento
+ * - J: segmento do poder judiciário
+ * - TR: tribunal do respectivo segmento
+ * - OOOO: código da origem
+ */
 export function validarNumeroCNJ(numero: string): boolean {
-  // Remove espaços, pontos e hífens
-  const numeroLimpo = numero.replace(/[\s.-]/g, '');
+  // Remove caracteres não numéricos
+  const numeroLimpo = numero.replace(/\D/g, '');
   
   // Verifica se tem exatamente 17 dígitos
-  if (numeroLimpo.length !== 17 || !/^\d{17}$/.test(numeroLimpo)) {
+  if (numeroLimpo.length !== 17) {
     return false;
   }
   
-  // Validação do dígito verificador (algoritmo CNJ)
-  const sequencial = numeroLimpo.substring(0, 6);
-  const digitoVerificador = numeroLimpo.substring(6, 8);
-  const anoAjuizamento = numeroLimpo.substring(8, 12);
-  const segmentoJudiciario = numeroLimpo.substring(12, 13);
-  const tribunal = numeroLimpo.substring(13, 15);
-  const origem = numeroLimpo.substring(15, 17);
+  // Extrai as partes do número
+  const sequencial = numeroLimpo.substring(0, 7);
+  const digitoVerificador = numeroLimpo.substring(7, 9);
+  const ano = numeroLimpo.substring(9, 13);
+  const segmento = numeroLimpo.substring(13, 14);
+  const tribunal = numeroLimpo.substring(14, 16);
+  const origem = numeroLimpo.substring(16, 20);
   
-  // Calcula o dígito verificador
-  const numeroParaCalculo = sequencial + anoAjuizamento + segmentoJudiciario + tribunal + origem;
-  let soma = 0;
-  
-  for (let i = 0; i < numeroParaCalculo.length; i++) {
-    soma += parseInt(numeroParaCalculo[i]) * (numeroParaCalculo.length - i + 1);
+  // Valida ano (deve ser >= 1998, ano de criação do CNJ)
+  const anoNum = parseInt(ano);
+  const anoAtual = new Date().getFullYear();
+  if (anoNum < 1998 || anoNum > anoAtual) {
+    return false;
   }
   
-  const resto1 = soma % 97;
-  const digito1 = 98 - resto1;
-  const digitoCalculado = digito1.toString().padStart(2, '0');
+  // Calcula dígito verificador
+  const digitoCalculado = calcularDigitoVerificadorCNJ(sequencial + ano + segmento + tribunal + origem);
   
-  return digitoVerificador === digitoCalculado;
+  return digitoVerificador === digitoCalculado.toString().padStart(2, '0');
 }
 
+/**
+ * Calcula o dígito verificador do número CNJ
+ */
+function calcularDigitoVerificadorCNJ(numero: string): number {
+  const pesos = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6, 7, 8];
+  let soma = 0;
+  
+  for (let i = 0; i < numero.length; i++) {
+    soma += parseInt(numero[i]) * pesos[i];
+  }
+  
+  const resto = soma % 97;
+  return 98 - resto;
+}
+
+/**
+ * Formata número CNJ para exibição
+ * Transforma 12345678901234567 em 1234567-89.0123.4.56.7890
+ */
 export function formatarNumeroCNJ(numero: string): string {
-  const numeroLimpo = numero.replace(/[\s.-]/g, '');
-  if (numeroLimpo.length !== 17) return numero;
+  const numeroLimpo = numero.replace(/\D/g, '');
   
-  return `${numeroLimpo.substring(0, 7)}-${numeroLimpo.substring(7, 9)}.${numeroLimpo.substring(9, 13)}.${numeroLimpo.substring(13, 14)}.${numeroLimpo.substring(14, 16)}.${numeroLimpo.substring(16, 18)}`;
+  if (numeroLimpo.length !== 17) {
+    return numero;
+  }
+  
+  return `${numeroLimpo.substring(0, 7)}-${numeroLimpo.substring(7, 9)}.${numeroLimpo.substring(9, 13)}.${numeroLimpo.substring(13, 14)}.${numeroLimpo.substring(14, 16)}.${numeroLimpo.substring(16, 20)}`;
 }
 
+/**
+ * Remove formatação do número CNJ
+ */
+export function limparNumeroCNJ(numero: string): string {
+  return numero.replace(/\D/g, '');
+}
+
+/**
+ * Formata data para exibição (DD/MM/AAAA)
+ */
 export function formatarData(data: string): string {
-  return new Date(data).toLocaleDateString('pt-BR');
-}
-
-export function formatarDataParaInput(data: string): string {
-  return new Date(data).toISOString().split('T')[0];
-}
-
-export function obterCorStatus(status: string): string {
-  const cores = {
-    'pendente': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    'em_andamento': 'bg-blue-100 text-blue-800 border-blue-200',
-    'concluida': 'bg-green-100 text-green-800 border-green-200',
-    'cancelada': 'bg-red-100 text-red-800 border-red-200',
-    'ativo': 'bg-green-100 text-green-800 border-green-200',
-    'suspenso': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    'arquivado': 'bg-gray-100 text-gray-800 border-gray-200',
-    'finalizado': 'bg-blue-100 text-blue-800 border-blue-200'
-  };
+  if (!data) return '';
   
-  return cores[status as keyof typeof cores] || 'bg-gray-100 text-gray-800 border-gray-200';
+  const dataObj = new Date(data + 'T00:00:00');
+  return dataObj.toLocaleDateString('pt-BR');
 }
 
-export function obterCorPrioridade(prioridade: string): string {
-  const cores = {
-    'baixa': 'bg-green-100 text-green-800 border-green-200',
-    'media': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    'alta': 'bg-orange-100 text-orange-800 border-orange-200',
-    'urgente': 'bg-red-100 text-red-800 border-red-200'
-  };
+/**
+ * Formata data para input (AAAA-MM-DD)
+ */
+export function formatarDataInput(data: string): string {
+  if (!data) return '';
   
-  return cores[prioridade as keyof typeof cores] || 'bg-gray-100 text-gray-800 border-gray-200';
+  const dataObj = new Date(data);
+  return dataObj.toISOString().split('T')[0];
+}
+
+/**
+ * Verifica se uma data está vencida
+ */
+export function isDataVencida(data: string): boolean {
+  if (!data) return false;
+  
+  const hoje = new Date();
+  const dataVencimento = new Date(data + 'T23:59:59');
+  
+  return dataVencimento < hoje;
+}
+
+/**
+ * Calcula dias restantes até uma data
+ */
+export function diasRestantes(data: string): number {
+  if (!data) return 0;
+  
+  const hoje = new Date();
+  const dataVencimento = new Date(data + 'T23:59:59');
+  
+  const diffTime = dataVencimento.getTime() - hoje.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays;
+}
+
+/**
+ * Retorna classe CSS baseada na prioridade
+ */
+export function getClassePrioridade(prioridade: string): string {
+  switch (prioridade) {
+    case 'urgente':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'alta':
+      return 'bg-orange-100 text-orange-800 border-orange-200';
+    case 'media':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'baixa':
+      return 'bg-green-100 text-green-800 border-green-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+}
+
+/**
+ * Retorna classe CSS baseada no status
+ */
+export function getClasseStatus(status: string): string {
+  switch (status) {
+    case 'concluida':
+    case 'finalizado':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'em_andamento':
+    case 'ativo':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'pendente':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'cancelada':
+    case 'arquivado':
+    case 'suspenso':
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
 }
