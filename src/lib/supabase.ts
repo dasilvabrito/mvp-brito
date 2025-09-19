@@ -20,8 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'X-Client-Info': 'supabase-js-web',
-      'Prefer': 'return=representation'
+      'X-Client-Info': 'supabase-js-web'
     }
   }
 });
@@ -29,24 +28,30 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Função para tratar erros específicos do Supabase
 const tratarErroSupabase = (error: any, operacao: string) => {
   console.error(`❌ Erro na operação ${operacao}:`, error);
-  console.error('Código do erro:', error.code);
-  console.error('Mensagem:', error.message);
-  console.error('Detalhes:', error.details);
-  console.error('Hint:', error.hint);
-
-  // Tratamento específico para erro PGRST205
-  if (error.code === 'PGRST205') {
-    console.error('🚨 ERRO PGRST205: Tabela não encontrada no schema cache');
-    console.error('💡 Possíveis soluções:');
-    console.error('   1. Verificar se as políticas RLS estão configuradas corretamente');
-    console.error('   2. Executar o script fix-database-policies.sql no painel do Supabase');
-    console.error('   3. Verificar se a tabela existe e está acessível via API');
-    console.error('   4. Reiniciar a API do Supabase se necessário');
-    
-    throw new Error(`Tabela não encontrada. Execute o script fix-database-policies.sql no painel do Supabase para corrigir as políticas RLS.`);
+  
+  // Log detalhado do erro
+  if (error) {
+    console.error('Código do erro:', error.code);
+    console.error('Mensagem:', error.message);
+    console.error('Detalhes:', error.details);
+    console.error('Hint:', error.hint);
   }
 
-  throw error;
+  // Tratamento específico para diferentes tipos de erro
+  if (error?.code === 'PGRST116') {
+    throw new Error('Erro de conexão com o banco de dados. Verifique suas credenciais do Supabase.');
+  }
+  
+  if (error?.code === 'PGRST205') {
+    throw new Error('Tabela não encontrada. Verifique se as tabelas foram criadas corretamente.');
+  }
+
+  if (error?.code === '42501') {
+    throw new Error('Permissão negada. Verifique as políticas RLS do Supabase.');
+  }
+
+  // Erro genérico
+  throw new Error(error?.message || 'Erro desconhecido no banco de dados.');
 };
 
 // Funções para operações com tarefas
@@ -59,21 +64,40 @@ export const tarefasService = {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
       }
 
+      // Preparar dados para inserção
+      const dadosInsercao = {
+        nome: tarefa.nome?.trim(),
+        descricao: tarefa.descricao?.trim() || '',
+        prazo: tarefa.prazo,
+        status: tarefa.status || 'pendente',
+        prioridade: tarefa.prioridade || 'media',
+        categoria: tarefa.categoria || 'Outros'
+      };
+
+      // Validar dados obrigatórios
+      if (!dadosInsercao.nome) {
+        throw new Error('Nome da tarefa é obrigatório.');
+      }
+      
+      if (!dadosInsercao.prazo) {
+        throw new Error('Prazo da tarefa é obrigatório.');
+      }
+
+      console.log('📝 Dados para inserção:', dadosInsercao);
+
       const { data, error } = await supabase
         .from('tarefas')
-        .insert([{
-          nome: tarefa.nome,
-          descricao: tarefa.descricao || '',
-          prazo: tarefa.prazo,
-          status: tarefa.status || 'pendente',
-          prioridade: tarefa.prioridade || 'media',
-          categoria: tarefa.categoria || 'Outros'
-        }])
+        .insert([dadosInsercao])
         .select()
         .single();
       
       if (error) {
+        console.error('❌ Erro do Supabase:', error);
         tratarErroSupabase(error, 'criar tarefa');
+      }
+      
+      if (!data) {
+        throw new Error('Nenhum dado retornado após inserção.');
       }
       
       console.log('✅ Tarefa criada com sucesso:', data);
@@ -96,18 +120,10 @@ export const tarefasService = {
       const { data, error } = await supabase
         .from('tarefas')
         .select('*')
-        .order('data_criacao', { ascending: false });
+        .order('created_at', { ascending: false });
       
       if (error) {
-        // Para listagem, vamos logar o erro mas retornar array vazio para não quebrar a UI
         console.error('❌ Erro ao listar tarefas:', error);
-        console.error('Código do erro:', error.code);
-        console.error('Mensagem:', error.message);
-        
-        if (error.code === 'PGRST205') {
-          console.error('🚨 ERRO PGRST205: Execute o script fix-database-policies.sql');
-        }
-        
         return [];
       }
       
@@ -127,20 +143,29 @@ export const tarefasService = {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
       }
 
+      if (!id) {
+        throw new Error('ID da tarefa é obrigatório para atualização.');
+      }
+
       // Se estiver marcando como concluída, adicionar data de conclusão
+      const dadosAtualizacao = { ...updates };
       if (updates.status === 'concluida' && !updates.data_conclusao) {
-        updates.data_conclusao = new Date().toISOString();
+        dadosAtualizacao.data_conclusao = new Date().toISOString();
       }
       
       const { data, error } = await supabase
         .from('tarefas')
-        .update(updates)
+        .update(dadosAtualizacao)
         .eq('id', id)
         .select()
         .single();
       
       if (error) {
         tratarErroSupabase(error, 'atualizar tarefa');
+      }
+      
+      if (!data) {
+        throw new Error('Tarefa não encontrada ou não foi possível atualizar.');
       }
       
       console.log('✅ Tarefa atualizada:', data);
@@ -157,6 +182,10 @@ export const tarefasService = {
       
       if (!supabaseUrl || !supabaseAnonKey) {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
+      }
+
+      if (!id) {
+        throw new Error('ID da tarefa é obrigatório para exclusão.');
       }
 
       const { error } = await supabase
@@ -186,21 +215,45 @@ export const processosService = {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
       }
 
+      // Preparar dados para inserção
+      const dadosInsercao = {
+        numero_processo: processo.numero_processo?.trim(),
+        cliente: processo.cliente?.trim(),
+        status_processo: processo.status_processo || 'ativo',
+        data_abertura: processo.data_abertura,
+        data_fechamento: processo.data_fechamento || null,
+        advogado_responsavel: processo.advogado_responsavel?.trim()
+      };
+
+      // Validar dados obrigatórios
+      if (!dadosInsercao.numero_processo) {
+        throw new Error('Número do processo é obrigatório.');
+      }
+      
+      if (!dadosInsercao.cliente) {
+        throw new Error('Nome do cliente é obrigatório.');
+      }
+      
+      if (!dadosInsercao.data_abertura) {
+        throw new Error('Data de abertura é obrigatória.');
+      }
+      
+      if (!dadosInsercao.advogado_responsavel) {
+        throw new Error('Advogado responsável é obrigatório.');
+      }
+
       const { data, error } = await supabase
         .from('processos')
-        .insert([{
-          numero_processo: processo.numero_processo,
-          cliente: processo.cliente,
-          status_processo: processo.status_processo || 'ativo',
-          data_abertura: processo.data_abertura,
-          data_fechamento: processo.data_fechamento || null,
-          advogado_responsavel: processo.advogado_responsavel
-        }])
+        .insert([dadosInsercao])
         .select()
         .single();
       
       if (error) {
         tratarErroSupabase(error, 'criar processo');
+      }
+      
+      if (!data) {
+        throw new Error('Nenhum dado retornado após inserção.');
       }
       
       console.log('✅ Processo criado:', data);
@@ -223,17 +276,10 @@ export const processosService = {
       const { data, error } = await supabase
         .from('processos')
         .select('*')
-        .order('data_abertura', { ascending: false });
+        .order('created_at', { ascending: false });
       
       if (error) {
         console.error('❌ Erro ao listar processos:', error);
-        console.error('Código do erro:', error.code);
-        console.error('Mensagem:', error.message);
-        
-        if (error.code === 'PGRST205') {
-          console.error('🚨 ERRO PGRST205: Execute o script fix-database-policies.sql');
-        }
-        
         return [];
       }
       
@@ -253,6 +299,10 @@ export const processosService = {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
       }
 
+      if (!id) {
+        throw new Error('ID do processo é obrigatório para atualização.');
+      }
+
       const { data, error } = await supabase
         .from('processos')
         .update(updates)
@@ -262,6 +312,10 @@ export const processosService = {
       
       if (error) {
         tratarErroSupabase(error, 'atualizar processo');
+      }
+      
+      if (!data) {
+        throw new Error('Processo não encontrado ou não foi possível atualizar.');
       }
       
       console.log('✅ Processo atualizado:', data);
@@ -278,6 +332,10 @@ export const processosService = {
       
       if (!supabaseUrl || !supabaseAnonKey) {
         throw new Error('Supabase não configurado. Verifique as variáveis de ambiente.');
+      }
+
+      if (!id) {
+        throw new Error('ID do processo é obrigatório para exclusão.');
       }
 
       const { error } = await supabase
@@ -314,9 +372,6 @@ export const testarConexao = async (): Promise<boolean> => {
     
     if (error) {
       console.error('❌ Erro na conexão:', error);
-      if (error.code === 'PGRST205') {
-        console.error('🚨 Execute o script fix-database-policies.sql para corrigir as políticas RLS');
-      }
       return false;
     }
     
