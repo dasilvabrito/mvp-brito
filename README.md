@@ -1,158 +1,161 @@
-# 🏛️ LegalTask - MVP Controle de Tarefas Jurídicas
+# 📋 Controle de Tarefas Jurídicas - MVP
 
-Um aplicativo moderno e responsivo para controle de tarefas e processos jurídicos, desenvolvido com Next.js 15, React 19 e Supabase.
+Um aplicativo web moderno para controle e gestão de tarefas e processos jurídicos, desenvolvido com Next.js 15, React 19, TypeScript e Supabase.
 
-## ✨ Funcionalidades
+## 🚀 Funcionalidades
 
-### 📋 Gestão de Tarefas
+### ✅ Gestão de Tarefas
 - **Cadastro completo**: Nome, descrição, prazo, status, prioridade e categoria
-- **Status**: Pendente, Em Andamento, Concluída, Cancelada
-- **Prioridades**: Baixa, Média, Alta, Urgente
-- **Categorias**: Audiência, Petição, Prazo, Reunião, Pesquisa, Outros
-- **Edição e conclusão** de tarefas em tempo real
+- **Validação inteligente**: Verificação de prazos e campos obrigatórios
+- **Status dinâmico**: Pendente, Em Andamento, Concluída, Cancelada
+- **Prioridades**: Baixa, Média, Alta, Urgente (com cores visuais)
+- **Categorias jurídicas**: Audiência, Petição, Recurso, Prazo processual, etc.
+- **Controle de prazos**: Alertas visuais para tarefas vencidas
+- **CRUD completo**: Criar, visualizar, editar e excluir tarefas
 
 ### ⚖️ Gestão de Processos
 - **Validação CNJ**: Número de processo com validação automática do padrão CNJ (17 dígitos)
-- **Formatação automática**: Exibição no formato padrão CNJ
-- **Informações completas**: Cliente, advogado responsável, datas de abertura/fechamento
-- **Status**: Ativo, Suspenso, Arquivado, Finalizado
+- **Formatação automática**: Número formatado automaticamente (0000000-00.0000.0.00.0000)
+- **Dados completos**: Cliente, advogado responsável, datas de abertura/fechamento
+- **Status processual**: Ativo, Arquivado, Suspenso, Finalizado
+- **CRUD completo**: Criar, visualizar, editar e excluir processos
 
 ### 🎨 Interface Moderna
-- **Design responsivo**: Funciona perfeitamente em mobile e desktop
-- **Gradientes modernos**: Visual profissional com cores azul/índigo
-- **Animações suaves**: Transições e hover effects
-- **Ícones Lucide**: Interface limpa e intuitiva
-- **Tailwind CSS**: Styling moderno e consistente
+- **Design responsivo**: Mobile-first, funciona perfeitamente em todos os dispositivos
+- **Tailwind CSS**: Estilização moderna e consistente
+- **Componentes Shadcn/ui**: Interface profissional e acessível
+- **Ícones Lucide**: Iconografia consistente e moderna
+- **Tema jurídico**: Cores e elementos visuais apropriados para o contexto jurídico
 
-## 🛠️ Tecnologias
+## 🛠️ Tecnologias Utilizadas
 
 - **Frontend**: Next.js 15, React 19, TypeScript
-- **Styling**: Tailwind CSS v4
-- **Banco de Dados**: Supabase (PostgreSQL)
+- **Estilização**: Tailwind CSS v4
+- **Componentes**: Shadcn/ui
+- **Banco de dados**: Supabase (PostgreSQL)
 - **Ícones**: Lucide React
-- **Validação**: Validação customizada CNJ
+- **Validação**: Validação customizada para números CNJ
+
+## 📊 Estrutura do Banco de Dados
+
+### Tabela `tarefas`
+```sql
+- id (UUID, PK)
+- nome (VARCHAR, NOT NULL)
+- descricao (TEXT)
+- prazo (DATE, NOT NULL)
+- status (VARCHAR, DEFAULT 'pendente')
+- prioridade (VARCHAR, DEFAULT 'media')
+- categoria (VARCHAR, DEFAULT 'geral')
+- data_criacao (TIMESTAMP, DEFAULT now())
+- data_conclusao (TIMESTAMP)
+- created_at (TIMESTAMP, DEFAULT now())
+- updated_at (TIMESTAMP, DEFAULT now())
+```
+
+### Tabela `processos`
+```sql
+- id (UUID, PK)
+- numero_processo (VARCHAR, NOT NULL, UNIQUE)
+- cliente (VARCHAR, NOT NULL)
+- status_processo (VARCHAR, DEFAULT 'ativo')
+- data_abertura (DATE, NOT NULL)
+- data_fechamento (DATE)
+- advogado_responsavel (VARCHAR, NOT NULL)
+- created_at (TIMESTAMP, DEFAULT now())
+- updated_at (TIMESTAMP, DEFAULT now())
+```
+
+## 🎯 Características do MVP
+
+### ✨ Funcionalidades Implementadas
+- [x] Cadastro de tarefas com validação completa
+- [x] Cadastro de processos com validação CNJ
+- [x] Interface responsiva (mobile + desktop)
+- [x] CRUD completo para tarefas e processos
+- [x] Validação de prazos e datas
+- [x] Sistema de prioridades visuais
+- [x] Formatação automática de números CNJ
+- [x] Integração completa com Supabase
+- [x] Tratamento de erros robusto
+- [x] Estados de loading e feedback visual
+
+### 🔧 Validações Implementadas
+- **Tarefas**: Nome obrigatório, prazo válido, validação de datas
+- **Processos**: Número CNJ válido (17 dígitos), cliente obrigatório, advogado obrigatório
+- **Datas**: Validação de consistência entre datas de abertura/fechamento
+- **Formulários**: Feedback visual de erros em tempo real
+
+### 📱 Responsividade
+- **Mobile-first**: Design otimizado para dispositivos móveis
+- **Breakpoints**: Adaptação automática para tablet e desktop
+- **Navegação**: Interface intuitiva em todos os tamanhos de tela
+- **Formulários**: Layouts adaptativos para melhor usabilidade
 
 ## 🚀 Como Usar
 
-### 1. Configurar Supabase
-1. Vá em **Configurações do Projeto** → **Integrações**
-2. Conecte sua conta Supabase
-3. Selecione ou crie um projeto Supabase
+1. **Visualizar dados**: A tela principal mostra estatísticas rápidas e listas de tarefas/processos
+2. **Criar tarefa**: Clique em "Nova Tarefa" e preencha o formulário
+3. **Criar processo**: Clique em "Novo Processo" e insira o número CNJ (será validado automaticamente)
+4. **Editar**: Clique no ícone de edição em qualquer item
+5. **Marcar concluída**: Clique no círculo ao lado da tarefa para marcar como concluída
+6. **Excluir**: Clique no ícone de lixeira (com confirmação)
 
-### 2. Criar Tabelas no Banco
-Execute o script SQL disponível em `database-setup.sql` no SQL Editor do Supabase:
+## 🔐 Configuração do Supabase
 
-```sql
--- Criar tabela de tarefas
-CREATE TABLE IF NOT EXISTS tarefas (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  nome TEXT NOT NULL,
-  descricao TEXT NOT NULL,
-  prazo DATE NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pendente', 'em_andamento', 'concluida', 'cancelada')) DEFAULT 'pendente',
-  prioridade TEXT NOT NULL CHECK (prioridade IN ('baixa', 'media', 'alta', 'urgente')) DEFAULT 'media',
-  categoria TEXT NOT NULL CHECK (categoria IN ('audiencia', 'peticao', 'prazo', 'reuniao', 'pesquisa', 'outros')) DEFAULT 'outros',
-  data_criacao TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  data_conclusao TIMESTAMP WITH TIME ZONE
-);
+O projeto está configurado para funcionar automaticamente com Supabase. As variáveis de ambiente são gerenciadas automaticamente pelo sistema da Lasy.
 
--- Criar tabela de processos
-CREATE TABLE IF NOT EXISTS processos (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  numero_processo TEXT NOT NULL UNIQUE,
-  cliente TEXT NOT NULL,
-  status_processo TEXT NOT NULL CHECK (status_processo IN ('ativo', 'suspenso', 'arquivado', 'finalizado')) DEFAULT 'ativo',
-  data_abertura DATE NOT NULL,
-  data_fechamento DATE,
-  advogado_responsavel TEXT NOT NULL
-);
+### Políticas RLS
+As tabelas possuem políticas RLS (Row Level Security) configuradas para permitir operações CRUD básicas.
 
--- Habilitar RLS e criar políticas permissivas para desenvolvimento
-ALTER TABLE tarefas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE processos ENABLE ROW LEVEL SECURITY;
+## 📈 Próximas Funcionalidades (Roadmap)
 
-CREATE POLICY "Permitir todas as operações em tarefas" ON tarefas FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Permitir todas as operações em processos" ON processos FOR ALL USING (true) WITH CHECK (true);
-```
-
-### 3. Usar o Aplicativo
-- **Tarefas**: Clique em "Nova Tarefa" para cadastrar tarefas jurídicas
-- **Processos**: Clique em "Novo Processo" para cadastrar processos com validação CNJ
-- **Edição**: Use os ícones de edição para modificar registros existentes
-- **Conclusão**: Marque tarefas como concluídas com um clique
-
-## 📱 Interface Responsiva
-
-### Mobile
-- Menu de abas otimizado para toque
-- Formulários adaptados para telas pequenas
-- Cards empilhados verticalmente
-- Botões com tamanho adequado para dedos
-
-### Desktop
-- Layout em grid responsivo
-- Formulários em duas colunas
-- Hover effects e transições suaves
-- Aproveitamento total da tela
-
-## 🔧 Estrutura do Projeto
-
-```
-src/
-├── app/
-│   ├── page.tsx              # Página principal com dashboard
-│   └── layout.tsx            # Layout base da aplicação
-├── components/
-│   ├── FormularioTarefa.tsx  # Modal para cadastro/edição de tarefas
-│   └── FormularioProcesso.tsx # Modal para cadastro/edição de processos
-└── lib/
-    ├── supabase.ts           # Cliente e serviços Supabase
-    ├── types.ts              # Interfaces TypeScript
-    └── utils.ts              # Utilitários e validações
-```
-
-## 🎯 Validações Implementadas
-
-### Tarefas
-- Nome e descrição obrigatórios
-- Prazo não pode ser anterior à data atual
-- Status e prioridade com valores pré-definidos
-
-### Processos
-- Número CNJ com validação completa do algoritmo
-- Formatação automática no padrão CNJ
-- Cliente e advogado responsável obrigatórios
-- Data de fechamento obrigatória para processos finalizados
-
-## 🔐 Segurança
-
-- **Row Level Security (RLS)** habilitado no Supabase
-- Políticas permissivas para desenvolvimento
-- Validação tanto no frontend quanto no banco de dados
-- Tipos TypeScript para segurança de dados
+- [ ] Dashboard com gráficos e métricas
+- [ ] Sistema de notificações para prazos
+- [ ] Filtros avançados e busca
+- [ ] Relatórios em PDF
+- [ ] Integração com calendário
+- [ ] Sistema de usuários e permissões
+- [ ] Anexos de documentos
+- [ ] Histórico de alterações
+- [ ] API REST para integrações
 
 ## 🎨 Design System
 
-### Cores
-- **Primária**: Gradiente azul/índigo (#3B82F6 → #6366F1)
-- **Status**: Verde (concluído), Amarelo (pendente), Azul (em andamento), Vermelho (cancelado)
-- **Prioridades**: Verde (baixa), Amarelo (média), Laranja (alta), Vermelho (urgente)
+### Cores Principais
+- **Azul jurídico**: `#1e40af` (elementos principais)
+- **Verde sucesso**: `#059669` (tarefas concluídas)
+- **Vermelho alerta**: `#dc2626` (prazos vencidos)
+- **Amarelo atenção**: `#d97706` (prioridade alta)
 
-### Componentes
-- Cards com sombras suaves e bordas arredondadas
-- Botões com gradientes e efeitos hover
-- Formulários com validação visual
-- Ícones consistentes do Lucide React
+### Tipografia
+- **Fonte principal**: Inter (legibilidade otimizada)
+- **Tamanhos**: Sistema responsivo com escalas adequadas
 
-## 📈 Próximos Passos
+## 🔧 Arquitetura
 
-1. **Autenticação**: Implementar login/registro de usuários
-2. **Filtros**: Adicionar filtros por status, prioridade, categoria
-3. **Busca**: Sistema de busca por nome/descrição
-4. **Relatórios**: Dashboard com métricas e gráficos
-5. **Notificações**: Alertas para prazos próximos
-6. **Anexos**: Upload de documentos relacionados
+### Estrutura de Pastas
+```
+src/
+├── app/                 # Páginas Next.js 15
+├── components/          # Componentes React
+│   ├── ui/             # Componentes Shadcn/ui
+│   ├── FormularioTarefa.tsx
+│   └── FormularioProcesso.tsx
+├── lib/                # Utilitários e configurações
+│   ├── supabase.ts     # Cliente e serviços Supabase
+│   ├── types.ts        # Tipos TypeScript
+│   └── utils.ts        # Funções utilitárias
+```
+
+### Padrões de Código
+- **TypeScript**: Tipagem estrita em todo o projeto
+- **Componentes funcionais**: Hooks modernos do React
+- **Separação de responsabilidades**: Lógica de negócio separada da UI
+- **Tratamento de erros**: Sistema robusto de error handling
 
 ---
 
-**Desenvolvido com ❤️ usando Next.js 15, React 19 e Supabase**
+**Desenvolvido com ❤️ para profissionais do direito**
+
+*Este MVP fornece uma base sólida para um sistema completo de gestão jurídica, com foco na usabilidade e eficiência.*
